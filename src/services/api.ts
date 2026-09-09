@@ -32,22 +32,50 @@ function getAuthHeaders(): HeadersInit {
   return headers;
 }
 
+// Safe JSON parser helper to prevent "Unexpected token 'T' / '<' ... is not valid JSON" crashes
+async function handleResponse<T = any>(res: Response): Promise<T> {
+  const text = await res.text();
+  try {
+    return JSON.parse(text);
+  } catch (err) {
+    if (!res.ok) {
+      return {
+        success: false,
+        error: `Server responded with status ${res.status}: ${res.statusText || 'Unexpected server response'}. If running on Vercel, please check your Vercel deployment logs and MONGODB_URI.`,
+      } as any;
+    }
+    return {
+      success: false,
+      error: 'Received non-JSON response from server.',
+    } as any;
+  }
+}
+
 export const api = {
   // ----------------------------------------------------
   // AUTH
   // ----------------------------------------------------
   auth: {
     async login(password: string, email?: string): Promise<{ success: boolean; token: string; user: AdminUser; error?: string }> {
-      const res = await fetch(`${API_BASE}/auth/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password, email }),
-      });
-      const data = await res.json();
-      if (data.token) {
-        localStorage.setItem('galaxy_admin_token', data.token);
+      try {
+        const res = await fetch(`${API_BASE}/auth/login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password, email }),
+        });
+        const data = await handleResponse<{ success: boolean; token: string; user: AdminUser; error?: string }>(res);
+        if (data.token) {
+          localStorage.setItem('galaxy_admin_token', data.token);
+        }
+        return data;
+      } catch (e: any) {
+        return {
+          success: false,
+          token: '',
+          user: {} as AdminUser,
+          error: e?.message || 'Network communication error. Please check your internet connection and server status.',
+        };
       }
-      return data;
     },
 
     async me(): Promise<{ success: boolean; user?: AdminUser }> {
@@ -57,7 +85,7 @@ export const api = {
         const res = await fetch(`${API_BASE}/auth/me`, {
           headers: getAuthHeaders(),
         });
-        return await res.json();
+        return await handleResponse(res);
       } catch (err) {
         return { success: false };
       }
@@ -76,7 +104,7 @@ export const api = {
         headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
         body: JSON.stringify(profile),
       });
-      return await res.json();
+      return await handleResponse(res);
     },
 
     async changePassword(passwords: { currentPassword: string; newPassword: string; confirmPassword: string }) {
@@ -85,7 +113,7 @@ export const api = {
         headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
         body: JSON.stringify(passwords),
       });
-      return await res.json();
+      return await handleResponse(res);
     },
   },
 
@@ -103,19 +131,19 @@ export const api = {
         });
       }
       const res = await fetch(`${API_BASE}/properties?${query.toString()}`);
-      return await res.json();
+      return await handleResponse(res);
     },
 
     async getBySlug(slug: string): Promise<{ data: Property }> {
       const res = await fetch(`${API_BASE}/properties/${slug}`);
-      return await res.json();
+      return await handleResponse(res);
     },
 
     async getAdminAll(): Promise<{ data: Property[]; stats: any }> {
       const res = await fetch(`${API_BASE}/properties/admin/all`, {
         headers: getAuthHeaders(),
       });
-      return await res.json();
+      return await handleResponse(res);
     },
 
     async create(property: Partial<Property>): Promise<{ success: boolean; data?: Property; error?: string }> {
@@ -124,7 +152,7 @@ export const api = {
         headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
         body: JSON.stringify(property),
       });
-      const data = await res.json();
+      const data = await handleResponse(res);
       if (data.success) dispatchContentUpdated();
       return data;
     },
@@ -135,7 +163,7 @@ export const api = {
         headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
         body: JSON.stringify(property),
       });
-      const data = await res.json();
+      const data = await handleResponse(res);
       if (data.success) dispatchContentUpdated();
       return data;
     },
@@ -145,7 +173,7 @@ export const api = {
         method: 'DELETE',
         headers: getAuthHeaders(),
       });
-      const data = await res.json();
+      const data = await handleResponse(res);
       if (data.success) dispatchContentUpdated();
       return data;
     },
@@ -155,7 +183,7 @@ export const api = {
         method: 'POST',
         headers: getAuthHeaders(),
       });
-      const data = await res.json();
+      const data = await handleResponse(res);
       if (data.success) dispatchContentUpdated();
       return data;
     },
@@ -226,7 +254,7 @@ export const api = {
             continue;
           }
 
-          const json = await res.json();
+          const json = await handleResponse(res);
           if (!res.ok || !json.success) {
             errors.push(`${file.name}: ${json.error || 'Upload error'}`);
             continue;
@@ -275,7 +303,7 @@ export const api = {
         headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
         body: JSON.stringify(data),
       });
-      const result = await res.json();
+      const result = await handleResponse(res);
       if (result.success) dispatchContentUpdated();
       return result;
     },
@@ -288,7 +316,7 @@ export const api = {
       const res = await fetch(`${API_BASE}/media/admin/library?${query.toString()}`, {
         headers: getAuthHeaders(),
       });
-      return await res.json();
+      return await handleResponse(res);
     },
 
     async delete(fileId: string): Promise<{ success: boolean }> {
@@ -296,7 +324,7 @@ export const api = {
         method: 'DELETE',
         headers: getAuthHeaders(),
       });
-      const data = await res.json();
+      const data = await handleResponse(res);
       if (data.success) dispatchContentUpdated();
       return data;
     },
@@ -307,7 +335,7 @@ export const api = {
         headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
         body: JSON.stringify(updates),
       });
-      const data = await res.json();
+      const data = await handleResponse(res);
       if (data.success) dispatchContentUpdated();
       return data;
     },
@@ -319,7 +347,7 @@ export const api = {
   content: {
     async getHomepage(): Promise<{ data: HomepageContent }> {
       const res = await fetch(`${API_BASE}/content/homepage`);
-      return await res.json();
+      return await handleResponse(res);
     },
 
     async updateHomepage(content: Partial<HomepageContent>): Promise<{ success: boolean }> {
@@ -328,14 +356,14 @@ export const api = {
         headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
         body: JSON.stringify(content),
       });
-      const data = await res.json();
+      const data = await handleResponse(res);
       if (data.success) dispatchContentUpdated();
       return data;
     },
 
     async getAbout(): Promise<{ data: AboutContent }> {
       const res = await fetch(`${API_BASE}/content/about`);
-      return await res.json();
+      return await handleResponse(res);
     },
 
     async updateAbout(content: Partial<AboutContent>): Promise<{ success: boolean }> {
@@ -344,14 +372,14 @@ export const api = {
         headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
         body: JSON.stringify(content),
       });
-      const data = await res.json();
+      const data = await handleResponse(res);
       if (data.success) dispatchContentUpdated();
       return data;
     },
 
     async getServices(): Promise<{ data: ServiceItem[] }> {
       const res = await fetch(`${API_BASE}/content/services`);
-      return await res.json();
+      return await handleResponse(res);
     },
 
     async createService(service: Partial<ServiceItem>): Promise<{ success: boolean; data?: ServiceItem }> {
@@ -360,7 +388,7 @@ export const api = {
         headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
         body: JSON.stringify(service),
       });
-      const data = await res.json();
+      const data = await handleResponse(res);
       if (data.success) dispatchContentUpdated();
       return data;
     },
@@ -371,7 +399,7 @@ export const api = {
         headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
         body: JSON.stringify(service),
       });
-      const data = await res.json();
+      const data = await handleResponse(res);
       if (data.success) dispatchContentUpdated();
       return data;
     },
@@ -381,14 +409,14 @@ export const api = {
         method: 'DELETE',
         headers: getAuthHeaders(),
       });
-      const data = await res.json();
+      const data = await handleResponse(res);
       if (data.success) dispatchContentUpdated();
       return data;
     },
 
     async getTestimonials(): Promise<{ data: Testimonial[] }> {
       const res = await fetch(`${API_BASE}/content/testimonials`);
-      return await res.json();
+      return await handleResponse(res);
     },
 
     async createTestimonial(testimonial: Partial<Testimonial>): Promise<{ success: boolean; data?: Testimonial }> {
@@ -397,7 +425,7 @@ export const api = {
         headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
         body: JSON.stringify(testimonial),
       });
-      const data = await res.json();
+      const data = await handleResponse(res);
       if (data.success) dispatchContentUpdated();
       return data;
     },
@@ -408,7 +436,7 @@ export const api = {
         headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
         body: JSON.stringify(testimonial),
       });
-      const data = await res.json();
+      const data = await handleResponse(res);
       if (data.success) dispatchContentUpdated();
       return data;
     },
@@ -418,14 +446,14 @@ export const api = {
         method: 'DELETE',
         headers: getAuthHeaders(),
       });
-      const data = await res.json();
+      const data = await handleResponse(res);
       if (data.success) dispatchContentUpdated();
       return data;
     },
 
     async getSEO(): Promise<{ data: SEOConfig }> {
       const res = await fetch(`${API_BASE}/content/seo`);
-      return await res.json();
+      return await handleResponse(res);
     },
 
     async updateSEO(seo: Partial<SEOConfig>): Promise<{ success: boolean }> {
@@ -434,7 +462,7 @@ export const api = {
         headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
         body: JSON.stringify(seo),
       });
-      const data = await res.json();
+      const data = await handleResponse(res);
       if (data.success) dispatchContentUpdated();
       return data;
     },
@@ -446,7 +474,7 @@ export const api = {
   settings: {
     async get(): Promise<{ data: CompanyConfig }> {
       const res = await fetch(`${API_BASE}/settings`);
-      return await res.json();
+      return await handleResponse(res);
     },
 
     async update(settings: Partial<CompanyConfig>): Promise<{ success: boolean }> {
@@ -455,7 +483,7 @@ export const api = {
         headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
         body: JSON.stringify(settings),
       });
-      const data = await res.json();
+      const data = await handleResponse(res);
       if (data.success) dispatchContentUpdated();
       return data;
     },
@@ -466,7 +494,7 @@ export const api = {
         headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
         body: JSON.stringify({ whatsapp, defaultWhatsAppMessage }),
       });
-      const data = await res.json();
+      const data = await handleResponse(res);
       if (data.success) dispatchContentUpdated();
       return data;
     },
@@ -492,7 +520,7 @@ export const api = {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(inquiry),
       });
-      return await res.json();
+      return await handleResponse(res);
     },
 
     async submitPublic(inquiry: {
@@ -517,7 +545,7 @@ export const api = {
       const res = await fetch(`${API_BASE}/inquiries/admin/all?${query.toString()}`, {
         headers: getAuthHeaders(),
       });
-      return await res.json();
+      return await handleResponse(res);
     },
 
     async updateStatus(id: string, status: string, notes?: string): Promise<{ success: boolean }> {
@@ -526,7 +554,7 @@ export const api = {
         headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
         body: JSON.stringify({ status, notes }),
       });
-      return await res.json();
+      return await handleResponse(res);
     },
 
     async delete(id: string): Promise<{ success: boolean }> {
@@ -534,7 +562,7 @@ export const api = {
         method: 'DELETE',
         headers: getAuthHeaders(),
       });
-      return await res.json();
+      return await handleResponse(res);
     },
   },
 
@@ -549,7 +577,7 @@ export const api = {
       const res = await fetch(`${API_BASE}/admin/activity?${query.toString()}`, {
         headers: getAuthHeaders(),
       });
-      return await res.json();
+      return await handleResponse(res);
     },
   },
 
@@ -567,7 +595,7 @@ export const api = {
         headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
         body: JSON.stringify({ backupData, overwrite }),
       });
-      return await res.json();
+      return await handleResponse(res);
     },
   },
 };

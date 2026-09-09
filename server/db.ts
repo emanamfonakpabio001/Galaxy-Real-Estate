@@ -18,6 +18,7 @@ let client: MongoClient | null = null;
 let db: Db | null = null;
 let gridfsBucket: GridFSBucket | null = null;
 let memoryServer: MongoMemoryServer | null = null;
+let connectPromise: Promise<{ db: Db; bucket: GridFSBucket }> | null = null;
 
 let dbStatus = {
   mode: 'embedded' as 'atlas' | 'embedded',
@@ -34,73 +35,94 @@ export async function connectToDatabase(): Promise<{ db: Db; bucket: GridFSBucke
     return { db, bucket: gridfsBucket };
   }
 
-  const uri = config.mongodbUri;
-  const hasValidScheme = uri.startsWith('mongodb://') || uri.startsWith('mongodb+srv://');
-
-  if (uri && hasValidScheme) {
-    try {
-      const maskedUri = uri.replace(/:[^:@]+@/, ':****@');
-      console.log(`🔌 Attempting connection to MongoDB Atlas cluster: ${maskedUri}...`);
-      const externalClient = new MongoClient(uri, {
-        serverSelectionTimeoutMS: 5000,
-        connectTimeoutMS: 5000,
-      });
-      await externalClient.connect();
-      client = externalClient;
-      db = client.db(config.mongodbDatabase);
-      dbStatus = {
-        mode: 'atlas',
-        database: config.mongodbDatabase,
-        connected: true,
-      };
-      console.log(`✅ Successfully connected to external MongoDB Atlas database: ${config.mongodbDatabase}`);
-    } catch (externalErr: any) {
-      // Atlas SSL alert 80 / timeout occurs when client IP is not whitelisted in Atlas Network Access
-      console.log(`ℹ️ Remote MongoDB Atlas is pending IP whitelist in Atlas Network Access (0.0.0.0/0).`);
-      console.log('🔄 Activating built-in high-performance MongoDB engine so Galaxy Real Estate is fully operational.');
-      client = null;
-      db = null;
-    }
+  if (connectPromise) {
+    return connectPromise;
   }
 
-  // Fallback to embedded high-performance memory MongoDB if no external DB or if external connection failed
-  if (!db) {
-    try {
-      if (!memoryServer) {
-        console.log('🔄 Initializing embedded MongoDB engine...');
-        memoryServer = await MongoMemoryServer.create({
-          instance: {
-            dbName: config.mongodbDatabase,
-          },
+  connectPromise = (async () => {
+    const uri = config.mongodbUri;
+    const hasValidScheme = uri.startsWith('mongodb://') || uri.startsWith('mongodb+srv://');
+
+    if (uri && hasValidScheme) {
+      try {
+        const maskedUri = uri.replace(/:[^:@]+@/, ':****@');
+        console.log(`🔌 Attempting connection to MongoDB Atlas cluster: ${maskedUri}...`);
+        const externalClient = new MongoClient(uri, {
+          serverSelectionTimeoutMS: 6000,
+          connectTimeoutMS: 6000,
         });
+        await externalClient.connect();
+        client = externalClient;
+        db = client.db(config.mongodbDatabase);
+        dbStatus = {
+          mode: 'atlas',
+          database: config.mongodbDatabase,
+          connected: true,
+        };
+        console.log(`✅ Successfully connected to external MongoDB Atlas database: ${config.mongodbDatabase}`);
+      } catch (externalErr: any) {
+        console.log(`⚠️ Remote MongoDB Atlas connection notice: ${externalErr?.message || externalErr}`);
+        console.log(`ℹ️ Ensure IP whitelist in Atlas Network Access includes (0.0.0.0/0).`);
+        client = null;
+        db = null;
       }
-      const memUri = memoryServer.getUri();
-      client = new MongoClient(memUri);
-      await client.connect();
-      db = client.db(config.mongodbDatabase);
-      dbStatus = {
-        mode: 'embedded',
-        database: config.mongodbDatabase,
-        connected: true,
-      };
-      console.log(`✅ Embedded MongoDB engine ready and connected.`);
-    } catch (memErr) {
-      console.error('Embedded memory MongoDB server failure:', memErr);
-      throw memErr;
     }
+
+    // Fallback to embedded high-performance memory MongoDB if no external DB or if external connection failed
+    if (!db) {
+      // In serverless environments (e.g. Vercel), external MONGODB_URI is required
+      const isServerless = process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME;
+      if (isServerless && (!uri || !hasValidScheme)) {
+        throw new Error('MONGODB_URI is required when running on Vercel. Please add your MongoDB Atlas connection string in Vercel Project Settings > Environment Variables.');
+      }
+
+      try {
+        if (!memoryServer) {
+          console.log('🔄 Initializing embedded MongoDB engine...');
+          memoryServer = await MongoMemoryServer.create({
+            instance: {
+              dbName: config.mongodbDatabase,
+            },
+          });
+        }
+        const memUri = memoryServer.getUri();
+        client = new MongoClient(memUri);
+        await client.connect();
+        db = client.db(config.mongodbDatabase);
+        dbStatus = {
+          mode: 'embedded',
+          database: config.mongodbDatabase,
+          connected: true,
+        };
+        console.log(`✅ Embedded MongoDB engine ready and connected.`);
+      } catch (memErr: any) {
+        console.error('Embedded memory MongoDB server failure:', memErr?.message || memErr);
+        if (isServerless) {
+          throw new Error('Please configure a valid MONGODB_URI in Vercel Environment Variables.');
+        }
+        throw memErr;
+      }
+    }
+
+    // Initialize GridFSBucket for binary image storage
+    gridfsBucket = new GridFSBucket(db, {
+      bucketName: 'mediaFiles',
+    });
+
+    console.log('✅ GridFS binary storage bucket initialized.');
+
+    // Create Collections and Indexes
+    await setupIndexesAndSeed(db);
+
+    return { db, bucket: gridfsBucket };
+  })();
+
+  try {
+    return await connectPromise;
+  } catch (err) {
+    connectPromise = null;
+    throw err;
   }
-
-  // Initialize GridFSBucket for binary image storage
-  gridfsBucket = new GridFSBucket(db, {
-    bucketName: 'mediaFiles',
-  });
-
-  console.log('✅ GridFS binary storage bucket initialized.');
-
-  // Create Collections and Indexes
-  await setupIndexesAndSeed(db);
-
-  return { db, bucket: gridfsBucket };
 }
 
 export function getDb(): Db {
@@ -167,7 +189,7 @@ async function setupIndexesAndSeed(database: Db) {
     } else {
       // Sync admin avatar to the configured luxury admin profile image
       await adminsCol.updateMany(
-        { $or: [{ avatar: { $regex: 'unsplash.com' } }, { avatar: { $exists: false } }, { avatar: '' }] },
+        { $or: [{ avatar: { $regex: 'unsplash.com' } }, { avatar: { $regex: '<blockquote' } }, { avatar: { $exists: false } }, { avatar: '' }] },
         { $set: { avatar: initialAdmin.avatar } }
       );
     }
