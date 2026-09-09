@@ -1,0 +1,6 @@
+{
+  "name": "Galaxy Real Estate",
+  "description": "Premium real estate company in Nigeria offering luxury homes, property sales, rentals, property management, and high-yield real estate investments.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
