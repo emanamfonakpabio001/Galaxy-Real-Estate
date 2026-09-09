@@ -99,3 +99,4 @@ app.use('/api', (err: any, req: express.Request, res: express.Response, next: ex
 });
 
 export { app };
+export default app;
