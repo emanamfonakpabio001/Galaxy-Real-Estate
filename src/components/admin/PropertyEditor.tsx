@@ -804,6 +804,56 @@ export const PropertyEditor: React.FC<PropertyEditorProps> = ({
                     </button>
                   ))}
                 </div>
+
+                {/* Mobile & Desktop Slide Actions in Preview */}
+                {images.length > 0 && images[previewSlide] && (
+                  <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-700/60">
+                    <div className="flex items-center gap-2">
+                      {images[previewSlide] === mainImage ? (
+                        <span className="px-2.5 py-1.5 rounded-lg bg-[#D4A84F] text-[#0B1F3A] text-xs font-bold flex items-center gap-1.5 shadow-xs">
+                          <Star className="w-3.5 h-3.5 fill-[#0B1F3A]" />
+                          Main Cover Photo
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => handleSetMain(images[previewSlide])}
+                          className="px-2.5 py-1.5 rounded-lg bg-[#D4A84F]/20 hover:bg-[#D4A84F]/30 text-[#D4A84F] border border-[#D4A84F]/50 text-xs font-bold flex items-center gap-1.5 transition active:scale-95"
+                          title="Set as Main Cover Photo"
+                        >
+                          <Star className="w-3.5 h-3.5" />
+                          Set as Cover
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleOpenEditor(previewSlide)}
+                        className="px-2.5 py-1.5 rounded-lg bg-blue-600/30 hover:bg-blue-600/50 text-blue-300 border border-blue-500/40 text-xs font-bold flex items-center gap-1.5 transition active:scale-95"
+                        title="Crop or edit photo"
+                      >
+                        <Edit3 className="w-3.5 h-3.5" />
+                        Crop / Edit Photo
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const slideToDelete = previewSlide;
+                          handleDeleteImage(slideToDelete);
+                          setPreviewSlide((prev) => Math.max(0, prev - 1));
+                        }}
+                        className="px-2.5 py-1.5 rounded-lg bg-red-600/30 hover:bg-red-600/50 text-red-300 border border-red-500/40 text-xs font-bold flex items-center gap-1.5 transition active:scale-95"
+                        title="Delete photo"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
@@ -815,17 +865,18 @@ export const PropertyEditor: React.FC<PropertyEditorProps> = ({
                 <p className="text-[11px] text-slate-400">Click &quot;Upload Photos&quot; above to select one or multiple photos.</p>
               </div>
             ) : (
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 {images.map((imgUrl, idx) => {
                   const isMain = mainImage === imgUrl;
                   return (
                     <div
                       key={idx}
-                      className={`relative rounded-xl overflow-hidden border-2 group shadow-sm transition bg-slate-50 flex flex-col justify-between ${
-                        isMain ? 'border-[#D4A84F]' : 'border-slate-200'
+                      className={`relative rounded-2xl overflow-hidden border-2 group shadow-xs transition bg-slate-50 flex flex-col justify-between ${
+                        isMain ? 'border-[#D4A84F] ring-2 ring-[#D4A84F]/20' : 'border-slate-200 hover:border-slate-300'
                       }`}
                     >
-                      <div className="relative h-32 w-full overflow-hidden bg-slate-100">
+                      {/* Image Frame */}
+                      <div className="relative h-36 w-full overflow-hidden bg-slate-100">
                         <img
                           src={imgUrl}
                           alt={`Property ${idx + 1}`}
@@ -833,67 +884,162 @@ export const PropertyEditor: React.FC<PropertyEditorProps> = ({
                         />
 
                         {/* Carousel Order Badge */}
-                        <span className="absolute top-2 left-2 px-2 py-0.5 rounded bg-black/70 text-white text-[10px] font-bold uppercase tracking-wider backdrop-blur-xs">
-                          #{idx + 1} {isMain && '• Main'}
-                        </span>
+                        <div className="absolute top-2 left-2 flex items-center gap-1.5 z-10">
+                          <span className="px-2 py-0.5 rounded-md bg-black/75 text-white text-[10px] font-bold uppercase tracking-wider backdrop-blur-xs shadow-xs">
+                            #{idx + 1}
+                          </span>
+                          {isMain && (
+                            <span className="px-2 py-0.5 rounded-md bg-[#D4A84F] text-[#0B1F3A] text-[10px] font-extrabold uppercase tracking-wider shadow-xs flex items-center gap-1">
+                              <Star className="w-3 h-3 fill-[#0B1F3A]" />
+                              Cover
+                            </span>
+                          )}
+                        </div>
 
-                        {/* Action Overlay */}
-                        <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1.5 p-2">
+                        {/* Mobile Quick Action Buttons (Always accessible on touch devices without needing hover) */}
+                        <div className="md:hidden absolute top-2 right-2 flex items-center gap-1 z-10">
                           {!isMain && (
                             <button
                               type="button"
                               onClick={() => handleSetMain(imgUrl)}
-                              className="p-1.5 bg-[#D4A84F] text-[#0B1F3A] rounded-lg text-xs font-bold hover:scale-110 transition"
+                              className="p-1.5 bg-[#D4A84F] text-[#0B1F3A] rounded-lg text-xs font-bold shadow-md active:scale-90 transition"
                               title="Set as Main Cover Photo"
                             >
                               <Star className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => handleOpenEditor(idx)}
+                            className="p-1.5 bg-blue-600 text-white rounded-lg text-xs font-bold shadow-md active:scale-90 transition"
+                            title="Crop / Edit Image"
+                          >
+                            <Edit3 className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteImage(idx)}
+                            className="p-1.5 bg-red-600 text-white rounded-lg text-xs font-bold shadow-md active:scale-90 transition"
+                            title="Delete Image"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+
+                        {/* Desktop Hover Overlay Controls */}
+                        <div className="hidden md:flex absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity items-center justify-center gap-2 p-2 z-10">
+                          {!isMain && (
+                            <button
+                              type="button"
+                              onClick={() => handleSetMain(imgUrl)}
+                              className="p-2 bg-[#D4A84F] text-[#0B1F3A] rounded-xl text-xs font-bold hover:scale-110 active:scale-95 transition shadow-lg flex items-center gap-1"
+                              title="Set as Main Cover Photo"
+                            >
+                              <Star className="w-4 h-4" />
+                              <span className="text-[11px]">Set Cover</span>
                             </button>
                           )}
 
                           <button
                             type="button"
                             onClick={() => handleOpenEditor(idx)}
-                            className="p-1.5 bg-blue-600 text-white rounded-lg text-xs font-bold hover:scale-110 transition"
+                            className="p-2 bg-blue-600 text-white rounded-xl text-xs font-bold hover:scale-110 active:scale-95 transition shadow-lg flex items-center gap-1"
                             title="Crop / Edit Image"
                           >
-                            <Edit3 className="w-3.5 h-3.5" />
+                            <Edit3 className="w-4 h-4" />
+                            <span className="text-[11px]">Crop / Edit</span>
                           </button>
 
                           <button
                             type="button"
                             onClick={() => handleDeleteImage(idx)}
-                            className="p-1.5 bg-red-600 text-white rounded-lg text-xs font-bold hover:scale-110 transition"
+                            className="p-2 bg-red-600 text-white rounded-xl text-xs font-bold hover:scale-110 active:scale-95 transition shadow-lg flex items-center gap-1"
                             title="Delete Image"
                           >
-                            <Trash2 className="w-3.5 h-3.5" />
+                            <Trash2 className="w-4 h-4" />
+                            <span className="text-[11px]">Delete</span>
                           </button>
                         </div>
                       </div>
 
-                      {/* Bottom Carousel Reorder Bar */}
-                      <div className="px-2 py-1.5 bg-white border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500">
-                        <span className="truncate font-medium text-slate-600">
-                          {isMain ? '★ Cover' : `Slide ${idx + 1}`}
-                        </span>
-                        
-                        <div className="flex items-center gap-1">
+                      {/* Bottom Mobile & Desktop Action Toolbar (Always visible on all screen sizes) */}
+                      <div className="p-2.5 bg-white border-t border-slate-100 flex flex-col gap-2">
+                        {/* Slide Label & Carousel Reordering */}
+                        <div className="flex items-center justify-between text-xs text-slate-600">
+                          <div className="flex items-center gap-1.5 font-bold truncate">
+                            {isMain ? (
+                              <span className="inline-flex items-center gap-1 text-[11px] font-extrabold text-[#0B1F3A] bg-[#D4A84F]/15 border border-[#D4A84F]/40 px-2 py-0.5 rounded-md">
+                                <Star className="w-3 h-3 fill-[#D4A84F] text-[#D4A84F]" />
+                                Main Cover Photo
+                              </span>
+                            ) : (
+                              <span className="text-slate-600 font-semibold text-xs">
+                                Slide #{idx + 1}
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="flex items-center gap-1 shrink-0">
+                            <span className="text-[10px] text-slate-400 font-medium mr-1 hidden xs:inline">Order:</span>
+                            <button
+                              type="button"
+                              onClick={() => handleMoveImage(idx, 'left')}
+                              disabled={idx === 0}
+                              className="p-1.5 hover:bg-slate-100 active:bg-slate-200 rounded-lg text-slate-600 disabled:opacity-25 disabled:cursor-not-allowed transition"
+                              title="Move Earlier in Carousel"
+                            >
+                              <MoveLeft className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleMoveImage(idx, 'right')}
+                              disabled={idx === images.length - 1}
+                              className="p-1.5 hover:bg-slate-100 active:bg-slate-200 rounded-lg text-slate-600 disabled:opacity-25 disabled:cursor-not-allowed transition"
+                              title="Move Later in Carousel"
+                            >
+                              <MoveRight className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Dedicated Mobile & Desktop Action Buttons: Change Cover, Crop/Edit, Delete */}
+                        <div className="grid grid-cols-3 gap-1.5 pt-1.5 border-t border-slate-100">
+                          {/* 1. Change Cover */}
                           <button
                             type="button"
-                            onClick={() => handleMoveImage(idx, 'left')}
-                            disabled={idx === 0}
-                            className="p-1 hover:bg-slate-100 rounded text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed transition"
-                            title="Move Earlier in Carousel"
+                            onClick={() => handleSetMain(imgUrl)}
+                            disabled={isMain}
+                            className={`py-2 px-1.5 rounded-xl text-[11px] font-bold flex items-center justify-center gap-1 transition active:scale-95 min-h-[38px] ${
+                              isMain
+                                ? 'bg-amber-100/70 text-amber-900 border border-amber-300/80 cursor-default'
+                                : 'bg-amber-50 hover:bg-amber-100 active:bg-amber-200 text-amber-900 border border-amber-200/90'
+                            }`}
+                            title={isMain ? 'Current Cover Photo' : 'Set as Main Cover Photo'}
                           >
-                            <MoveLeft className="w-3 h-3" />
+                            <Star className={`w-3.5 h-3.5 shrink-0 ${isMain ? 'fill-amber-500 text-amber-500' : 'text-amber-600'}`} />
+                            <span className="truncate">{isMain ? 'Cover' : 'Set Cover'}</span>
                           </button>
+
+                          {/* 2. Crop / Edit Photo */}
                           <button
                             type="button"
-                            onClick={() => handleMoveImage(idx, 'right')}
-                            disabled={idx === images.length - 1}
-                            className="p-1 hover:bg-slate-100 rounded text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed transition"
-                            title="Move Later in Carousel"
+                            onClick={() => handleOpenEditor(idx)}
+                            className="py-2 px-1.5 bg-blue-50 hover:bg-blue-100 active:bg-blue-200 text-blue-700 border border-blue-200 rounded-xl text-[11px] font-bold flex items-center justify-center gap-1 transition active:scale-95 min-h-[38px]"
+                            title="Crop or edit photo in studio"
                           >
-                            <MoveRight className="w-3 h-3" />
+                            <Edit3 className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                            <span className="truncate">Crop/Edit</span>
+                          </button>
+
+                          {/* 3. Delete Option */}
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteImage(idx)}
+                            className="py-2 px-1.5 bg-red-50 hover:bg-red-100 active:bg-red-200 text-red-700 border border-red-200 rounded-xl text-[11px] font-bold flex items-center justify-center gap-1 transition active:scale-95 min-h-[38px]"
+                            title="Delete photo"
+                          >
+                            <Trash2 className="w-3.5 h-3.5 text-red-600 shrink-0" />
+                            <span className="truncate">Delete</span>
                           </button>
                         </div>
                       </div>
